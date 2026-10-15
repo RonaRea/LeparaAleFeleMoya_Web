@@ -1,0 +1,16 @@
+{
+  "name": "lepara-ale-fele-moya-web",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:admin": "npm --workspace admin run dev --",
+    "build:admin": "npm --workspace admin run build",
+    "preview:admin": "npm --workspace admin run preview --",
+    "dev:public": "npm --workspace public run dev --",
+    "build:public": "npm --workspace public run build",
+    "preview:public": "npm --workspace public run preview --"
+  }
+}
