@@ -1,27 +1,6 @@
-import { ReactNode, createContext, useContext, useState } from 'react'
+import { ReactNode, createContext, useContext, useEffect, useState } from 'react'
 import { Link, NavLink, Navigate, Outlet, Route, Routes, useNavigate, useParams } from 'react-router-dom'
-
-type Product = {
-  id: string
-  slug: string
-  name: string
-  price: string
-  meta: string
-  caption: string
-  variant: 'tee' | 'hoodie' | 'tote'
-}
-
-type EventCard = {
-  slug: string
-  title: string
-  status: string
-  date: string
-  time: string
-  location: string
-  summary: string
-  details: string[]
-  variant: 'clothing-drive' | 'garden-day'
-}
+import { EventCard, OrderStep, Product, PublicBootstrapResponse, publicApi } from './api'
 
 type CartItem = {
   slug: string
@@ -40,76 +19,6 @@ type CartContextValue = {
   removeItem: (slug: string, size: string) => void
 }
 
-const products: Product[] = [
-  {
-    id: 'TEE-01',
-    slug: 'community-tee',
-    name: 'Community tee',
-    price: 'R250',
-    meta: 'White / Cotton / XS-XXL',
-    caption: 'A clean, comfortable staple designed for everyday wear.',
-    variant: 'tee',
-  },
-  {
-    id: 'HOD-01',
-    slug: 'everyday-hoodie',
-    name: 'Everyday hoodie',
-    price: 'R550',
-    meta: 'Black / Cotton blend / S-XXL',
-    caption: 'A practical layer with a softer feel for cooler days.',
-    variant: 'hoodie',
-  },
-  {
-    id: 'TOT-01',
-    slug: 'together-tote',
-    name: 'Together tote',
-    price: 'R180',
-    meta: 'Natural / Canvas / One size',
-    caption: 'Reusable, durable and simple enough to carry every day.',
-    variant: 'tote',
-  },
-]
-
-const events: EventCard[] = [
-  {
-    slug: 'community-clothing-drive',
-    title: 'Community clothing drive',
-    status: 'Upcoming',
-    date: 'Saturday, 24 October 2026',
-    time: '10:00-14:00 SAST',
-    location: 'Orlando Community Hall',
-    summary: 'Donate clean clothing and blankets, or volunteer to sort and prepare bundles for the community.',
-    details: [
-      'Donate clean clothing, blankets and reusable bags. Tell us what you plan to bring so we can prepare.',
-      'Volunteer for clothing sorting, welcome desk or bundle packing. Select a task and describe your availability.',
-      'Wear comfortable clothes. The team will share drop-off instructions after reviewing your submission.',
-    ],
-    variant: 'clothing-drive',
-  },
-  {
-    slug: 'spring-community-day',
-    title: 'Spring community day',
-    status: 'Completed',
-    date: 'Saturday, 26 September 2026',
-    time: '09:00-13:00',
-    location: 'Mofolo Community Garden, Soweto',
-    summary: 'A sample recap of a shared morning caring for a community garden and bringing neighbors together.',
-    details: [
-      'Garden beds were cleared and replanted with the help of local volunteers.',
-      'Extra seedlings and compost donations were distributed across nearby households.',
-      'Completed events remain visible as a record of community participation.',
-    ],
-    variant: 'garden-day',
-  },
-]
-
-const orderSteps = [
-  ['Order confirmed', '09 Oct 2026 - 10:24'],
-  ['Packed with care', '10 Oct 2026 - 08:40'],
-  ['On the way', '11 Oct 2026 - 14:10'],
-  ['Delivered', 'Expected 13 Oct 2026'],
-]
-
 const navItems = [
   { label: 'Home', to: '/' },
   { label: 'Shop', to: '/shop' },
@@ -118,22 +27,35 @@ const navItems = [
   { label: 'Account', to: '/account/orders' },
 ]
 
-const sizeOptionsByProduct: Record<Product['slug'], string[]> = {
-  'community-tee': ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
-  'everyday-hoodie': ['S', 'M', 'L', 'XL', 'XXL'],
-  'together-tote': ['One size'],
-}
-
-const defaultSizeByProduct: Record<Product['slug'], string> = {
-  'community-tee': 'M',
-  'everyday-hoodie': 'M',
-  'together-tote': 'One size',
-}
-
 const CartContext = createContext<CartContextValue | null>(null)
+const SiteDataContext = createContext<PublicBootstrapResponse | null>(null)
 
 function App() {
+  const [siteData, setSiteData] = useState<PublicBootstrapResponse | null>(null)
+  const [siteDataError, setSiteDataError] = useState<string | null>(null)
   const [cartItems, setCartItems] = useState<CartItem[]>([])
+
+  useEffect(() => {
+    let ignore = false
+
+    publicApi.getBootstrap()
+      .then((response) => {
+        if (!ignore) {
+          setSiteData(response)
+        }
+      })
+      .catch((error: Error) => {
+        if (!ignore) {
+          setSiteDataError(error.message)
+        }
+      })
+
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  const products = siteData?.products ?? []
   const subtotal = cartItems.reduce((sum, item) => {
     const product = products.find((entry) => entry.slug === item.slug)
     return sum + (product ? parsePrice(product.price) * item.quantity : 0)
@@ -190,26 +112,36 @@ function App() {
     removeItem,
   }
 
+  if (!siteData && !siteDataError) {
+    return <DataState title="Loading website data..." description="Using the dummy bootstrap client while no API URL is configured." />
+  }
+
+  if (!siteData) {
+    return <DataState title="Unable to load website data." description={`Check VITE_API_BASE_URL and the ${publicApi.routes.bootstrap} route. ${siteDataError}`} />
+  }
+
   return (
-    <CartContext.Provider value={cartContextValue}>
-      <Routes>
-        <Route element={<SiteFrame />}>
-          <Route index element={<HomePage />} />
-          <Route path="shop" element={<ShopPage />} />
-          <Route path="shop/:slug" element={<ProductPage />} />
-          <Route path="cart" element={<CartPage />} />
-          <Route path="checkout" element={<CheckoutPage />} />
-          <Route path="account" element={<Navigate to="/account/orders" replace />} />
-          <Route path="account/register" element={<RegisterPage />} />
-          <Route path="account/verify" element={<VerifyPage />} />
-          <Route path="account/orders" element={<OrdersPage />} />
-          <Route path="events" element={<EventsPage />} />
-          <Route path="events/:slug" element={<EventDetailPage />} />
-          <Route path="get-involved" element={<GetInvolvedPage />} />
-        </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </CartContext.Provider>
+    <SiteDataContext.Provider value={siteData}>
+      <CartContext.Provider value={cartContextValue}>
+        <Routes>
+          <Route element={<SiteFrame />}>
+            <Route index element={<HomePage />} />
+            <Route path="shop" element={<ShopPage />} />
+            <Route path="shop/:slug" element={<ProductPage />} />
+            <Route path="cart" element={<CartPage />} />
+            <Route path="checkout" element={<CheckoutPage />} />
+            <Route path="account" element={<Navigate to="/account/orders" replace />} />
+            <Route path="account/register" element={<RegisterPage />} />
+            <Route path="account/verify" element={<VerifyPage />} />
+            <Route path="account/orders" element={<OrdersPage />} />
+            <Route path="events" element={<EventsPage />} />
+            <Route path="events/:slug" element={<EventDetailPage />} />
+            <Route path="get-involved" element={<GetInvolvedPage />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </CartContext.Provider>
+    </SiteDataContext.Provider>
   )
 }
 
@@ -221,6 +153,29 @@ function useCart() {
   }
 
   return context
+}
+
+function useSiteData() {
+  const context = useContext(SiteDataContext)
+
+  if (!context) {
+    throw new Error('Site data is unavailable.')
+  }
+
+  return context
+}
+
+function DataState({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="site-shell">
+      <main className="page-body">
+        <section className="section-block compact-section">
+          <h1>{title}</h1>
+          <p className="lead-copy">{description}</p>
+        </section>
+      </main>
+    </div>
+  )
 }
 
 function SiteFrame() {
@@ -256,6 +211,8 @@ function SiteFrame() {
 }
 
 function HomePage() {
+  const { products } = useSiteData()
+
   return (
     <div className="page-stack">
       <section className="hero-grid section-block">
@@ -331,6 +288,8 @@ function HomePage() {
 }
 
 function ShopPage() {
+  const { products } = useSiteData()
+
   return (
     <div className="page-stack">
       <section className="section-block compact-section">
@@ -372,6 +331,7 @@ function ShopPage() {
 }
 
 function ProductPage() {
+  const { products, sizeOptionsByProduct, defaultSizeByProduct } = useSiteData()
   const { slug } = useParams()
   const navigate = useNavigate()
   const { addItem } = useCart()
@@ -632,6 +592,8 @@ function VerifyPage() {
 }
 
 function EventsPage() {
+  const { events } = useSiteData()
+
   return (
     <div className="page-stack">
       <section className="section-block compact-section">
@@ -672,6 +634,7 @@ function EventsPage() {
 }
 
 function EventDetailPage() {
+  const { events } = useSiteData()
   const { slug } = useParams()
   const event = events.find((item) => item.slug === slug)
 
@@ -767,6 +730,8 @@ function GetInvolvedPage() {
 }
 
 function OrdersPage() {
+  const { orderSteps } = useSiteData()
+
   return (
     <div className="page-stack">
       <section className="section-block compact-section">
@@ -878,6 +843,7 @@ function OrderItemCompact({
   onQuantityChange?: (slug: string, size: string, quantity: number) => void
   onRemove?: (slug: string, size: string) => void
 }) {
+  const { products } = useSiteData()
   const product = products.find((entry) => entry.slug === item.slug)
 
   if (!product) {
