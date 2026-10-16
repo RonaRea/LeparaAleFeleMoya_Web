@@ -1,8 +1,16 @@
-import { API_PATH, DEFAULT_API_BASE_URL } from './api-config'
+import { API_ORIGIN, API_PATH, DEFAULT_API_BASE_URL } from './api-config'
+
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
+const relativeApiBaseUrl = configuredApiBaseUrl?.startsWith('/') && !configuredApiBaseUrl.startsWith('//')
 
 export const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL ||
-  (import.meta.env.DEV ? API_PATH : DEFAULT_API_BASE_URL)
+  configuredApiBaseUrl
+    ? relativeApiBaseUrl && !import.meta.env.DEV
+      ? `${API_ORIGIN}${configuredApiBaseUrl}`
+      : configuredApiBaseUrl
+    : import.meta.env.DEV
+      ? API_PATH
+      : DEFAULT_API_BASE_URL
 ).replace(/\/+$/, '')
 
 export type ApiErrorField = {
