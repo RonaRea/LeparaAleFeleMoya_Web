@@ -27,6 +27,6 @@ VITE_API_BASE_URL=/api/v1
 
 For deployment, set `VITE_API_BASE_URL=https://lepara-api.onrender.com/api/v1` (or omit it to use the shared production default). The API must allow both deployed website origins in `CORS_ORIGINS` for browser requests and refresh cookies to work.
 
-The public app loads products, product variants, events, cart quotes, customer accounts, contribution forms and orders from the API. Orders are created with the API's required idempotency key and payment-method values. The admin app uses the API's admin sign-in, two-factor authentication, dashboard, products and orders endpoints.
+The public app loads products, product variants, events, cart quotes, customer accounts, contribution forms and orders from the API. Orders are created with the API's required idempotency key and payment-method values. The admin app uses the API's admin sign-in and two-factor authentication, and manages dashboard data, products, stock variants, orders, and events. Product and event image uploads use the API's multipart image endpoints. The API does not support deleting products or events: products can be hidden from the shop and events move through Draft, Published, and Closed statuses instead.
 
 The API documentation is available at https://lepara-api.onrender.com/api/docs. The API must allow the deployed storefront and admin origins in its CORS configuration for browser requests and refresh cookies to work.
