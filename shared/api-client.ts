@@ -66,18 +66,19 @@ export async function apiRequest<T>(
 ): Promise<T> {
   const requestHeaders = new Headers(headers)
 
-  if (body !== undefined) {
-    requestHeaders.set('Content-Type', 'application/json')
-  }
-
   if (accessToken) {
     requestHeaders.set('Authorization', `Bearer ${accessToken}`)
+  }
+
+  const requestBody = body instanceof FormData ? body : body === undefined ? undefined : JSON.stringify(body)
+  if (body !== undefined && !(body instanceof FormData)) {
+    requestHeaders.set('Content-Type', 'application/json')
   }
 
   const response = await fetch(`${API_BASE_URL}${route}`, {
     method,
     headers: requestHeaders,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: requestBody,
     credentials: 'include',
   })
 
