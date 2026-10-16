@@ -1,16 +1,30 @@
-import { getJsonOrMock } from '../../../shared/api-client'
+import { apiRequest } from '../../../shared/api-client'
+
+export type ProductVariant = {
+  variantId: number
+  size: string
+  availability: string
+}
 
 export type Product = {
   id: string
+  productId: number
   slug: string
   name: string
   price: string
+  priceCents: number
   meta: string
   caption: string
-  variant: 'tee' | 'hoodie' | 'tote'
+  variant: 'tee' | 'hoodie' | 'tote' | 'product'
+  categoryName: string
+  imageUrl: string | null
+  sizes: string[]
+  variants?: ProductVariant[]
+  inStock: boolean
 }
 
 export type EventCard = {
+  eventId: number
   slug: string
   title: string
   status: string
@@ -22,105 +36,115 @@ export type EventCard = {
   variant: 'clothing-drive' | 'garden-day'
 }
 
-export type OrderStep = [string, string]
-
 export type PublicBootstrapResponse = {
   products: Product[]
   events: EventCard[]
-  orderSteps: OrderStep[]
-  sizeOptionsByProduct: Record<Product['slug'], string[]>
-  defaultSizeByProduct: Record<Product['slug'], string>
+}
+
+type ApiProduct = {
+  productId: number
+  name: string
+  categoryName: string
+  colour: string | null
+  material: string | null
+  price: string
+  priceCents: number
+  subtitle: string
+  imageUrl: string | null
+  sizes: string[]
+  inStock: boolean
+  description?: string | null
+  variants?: ProductVariant[]
+}
+
+type ApiInitiative = {
+  initiativeId: number
+  title: string
+  typeName: string
+  summary: string
+  description: string
+  location: string | null
+  dateLabel: string
+  timeLabel: string | null
+  phase: string
 }
 
 export const publicApiRoutes = {
-  bootstrap: '/public/bootstrap',
-  products: '/public/products',
-  events: '/public/events',
-  accountOrders: '/public/account/orders',
-  checkout: '/public/checkout',
+  products: '/products',
+  initiatives: '/initiatives',
+  product: (productId: number) => `/products/${productId}`,
+  account: '/me',
+  accountProfile: '/me',
+  accountPassword: '/me/password',
+  accountEmailVerification: '/me/email/verify',
+  accountOrders: '/me/orders',
+  cartQuote: '/cart/quote',
+  checkout: '/orders',
+  register: '/auth/register',
+  verifyEmail: '/auth/verify-email',
+  login: '/auth/login',
 } as const
 
-const mockPublicBootstrap: PublicBootstrapResponse = {
-  products: [
-    {
-      id: 'TEE-01',
-      slug: 'community-tee',
-      name: 'Community tee',
-      price: 'R250',
-      meta: 'White / Cotton / XS-XXL',
-      caption: 'A clean, comfortable staple designed for everyday wear.',
-      variant: 'tee',
-    },
-    {
-      id: 'HOD-01',
-      slug: 'everyday-hoodie',
-      name: 'Everyday hoodie',
-      price: 'R550',
-      meta: 'Black / Cotton blend / S-XXL',
-      caption: 'A practical layer with a softer feel for cooler days.',
-      variant: 'hoodie',
-    },
-    {
-      id: 'TOT-01',
-      slug: 'together-tote',
-      name: 'Together tote',
-      price: 'R180',
-      meta: 'Natural / Canvas / One size',
-      caption: 'Reusable, durable and simple enough to carry every day.',
-      variant: 'tote',
-    },
-  ],
-  events: [
-    {
-      slug: 'community-clothing-drive',
-      title: 'Community clothing drive',
-      status: 'Upcoming',
-      date: 'Saturday, 24 October 2026',
-      time: '10:00-14:00 SAST',
-      location: 'Orlando Community Hall',
-      summary: 'Donate clean clothing and blankets, or volunteer to sort and prepare bundles for the community.',
-      details: [
-        'Donate clean clothing, blankets and reusable bags. Tell us what you plan to bring so we can prepare.',
-        'Volunteer for clothing sorting, welcome desk or bundle packing. Select a task and describe your availability.',
-        'Wear comfortable clothes. The team will share drop-off instructions after reviewing your submission.',
-      ],
-      variant: 'clothing-drive',
-    },
-    {
-      slug: 'spring-community-day',
-      title: 'Spring community day',
-      status: 'Completed',
-      date: 'Saturday, 26 September 2026',
-      time: '09:00-13:00',
-      location: 'Mofolo Community Garden, Soweto',
-      summary: 'A sample recap of a shared morning caring for a community garden and bringing neighbors together.',
-      details: [
-        'Garden beds were cleared and replanted with the help of local volunteers.',
-        'Extra seedlings and compost donations were distributed across nearby households.',
-        'Completed events remain visible as a record of community participation.',
-      ],
-      variant: 'garden-day',
-    },
-  ],
-  orderSteps: [
-    ['Order confirmed', '09 Oct 2026 - 10:24'],
-    ['Packed with care', '10 Oct 2026 - 08:40'],
-    ['On the way', '11 Oct 2026 - 14:10'],
-    ['Delivered', 'Expected 13 Oct 2026'],
-  ],
-  sizeOptionsByProduct: {
-    'community-tee': ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
-    'everyday-hoodie': ['S', 'M', 'L', 'XL', 'XXL'],
-    'together-tote': ['One size'],
-  },
-  defaultSizeByProduct: {
-    'community-tee': 'M',
-    'everyday-hoodie': 'M',
-    'together-tote': 'One size',
-  },
+function slugify(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+}
+
+function productVariant(categoryName: string): Product['variant'] {
+  const category = categoryName.toLowerCase()
+  if (category.includes('shirt') || category.includes('tee')) return 'tee'
+  if (category.includes('hoodie')) return 'hoodie'
+  if (category.includes('accessor') || category.includes('tote')) return 'tote'
+  return 'product'
+}
+
+function mapProduct(product: ApiProduct): Product {
+  return {
+    id: String(product.productId),
+    productId: product.productId,
+    slug: slugify(product.name),
+    name: product.name,
+    price: product.price,
+    priceCents: product.priceCents,
+    meta: product.subtitle,
+    caption: product.description ?? product.subtitle,
+    variant: productVariant(product.categoryName),
+    categoryName: product.categoryName,
+    imageUrl: product.imageUrl,
+    sizes: product.sizes,
+    variants: product.variants,
+    inStock: product.inStock,
+  }
+}
+
+function mapInitiative(event: ApiInitiative): EventCard {
+  const variant = event.typeName.toLowerCase().includes('garden') ? 'garden-day' : 'clothing-drive'
+  return {
+    eventId: event.initiativeId,
+    slug: String(event.initiativeId),
+    title: event.title,
+    status: event.phase,
+    date: event.dateLabel,
+    time: event.timeLabel ?? 'Time to be confirmed',
+    location: event.location ?? 'Location to be confirmed',
+    summary: event.summary,
+    details: [event.description],
+    variant,
+  }
 }
 
 export const publicApi = {
   routes: publicApiRoutes,
-  getBootstrap: () => getJsonOrMock(publicApiRoutes.bootstrap, mockPublicBootstrap),
+  async getBootstrap(): Promise<PublicBootstrapResponse> {
+    const [products, events] = await Promise.all([
+      apiRequest<ApiProduct[]>('/products'),
+      apiRequest<ApiInitiative[]>('/initiatives'),
+    ])
+    return {
+      products: products.map(mapProduct),
+      events: events.map(mapInitiative),
+    }
+  },
+  async getProduct(productId: number) {
+    return mapProduct(await apiRequest<ApiProduct>(publicApiRoutes.product(productId)))
+  },
 }

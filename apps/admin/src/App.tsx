@@ -1,6 +1,7 @@
-import { ReactNode, useEffect, useState } from 'react'
+import { FormEvent, ReactNode, useEffect, useState } from 'react'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
-import { AdminBootstrapResponse, AdminMetric, AdminTableRow, adminApi } from './api'
+import { AdminDashboardResponse, AdminOrder, AdminProduct, adminApi } from './api'
+import { useAdminAuth } from './AuthContext'
 
 const navItems = [
   { label: 'Overview', path: '/overview' },
@@ -13,36 +14,70 @@ const navItems = [
 ]
 
 function App() {
-  const [adminData, setAdminData] = useState<AdminBootstrapResponse | null>(null)
-  const [adminDataError, setAdminDataError] = useState<string | null>(null)
+  const { admin, isLoading, request, signOut, backupCodes } = useAdminAuth()
+  const [dashboard, setDashboard] = useState<AdminDashboardResponse | null>(null)
+  const [products, setProducts] = useState<AdminProduct[] | null>(null)
+  const [orders, setOrders] = useState<AdminOrder[] | null>(null)
+  const [dataForAdmin, setDataForAdmin] = useState<number | null>(null)
+  const [dataError, setDataError] = useState<string | null>(null)
+  const [signOutError, setSignOutError] = useState<string | null>(null)
 
   useEffect(() => {
     let ignore = false
+    if (!admin) return
+    setDataError(null)
 
-    adminApi.getBootstrap()
-      .then((response) => {
+    Promise.all([
+      adminApi.getDashboard(request),
+      adminApi.getProducts(request),
+      adminApi.getOrders(request),
+    ])
+      .then(([dashboardResult, productsResult, ordersResult]) => {
         if (!ignore) {
-          setAdminData(response)
+          setDashboard(dashboardResult)
+          setProducts(productsResult)
+          setOrders(ordersResult)
+          setDataForAdmin(admin.adminId)
+          setDataError(null)
         }
       })
       .catch((error: Error) => {
-        if (!ignore) {
-          setAdminDataError(error.message)
-        }
+        if (!ignore) setDataError(error.message)
       })
 
     return () => {
       ignore = true
     }
-  }, [])
+  }, [admin, request])
 
-  if (!adminData && !adminDataError) {
-    return <StandaloneState title="Loading admin data..." description="Using the dummy admin bootstrap client while no API URL is configured." />
+  if (isLoading) {
+    return <StandaloneState title="Checking admin session..." description="Connecting to the Lepara API." />
+  }
+  if (!admin) {
+    return <AdminLoginPage />
+  }
+  if (admin.mustChangePassword) {
+    return <AdminPasswordChangePage />
+  }
+  if (dataForAdmin !== admin.adminId || !dashboard || !products || !orders) {
+    return <StandaloneState title={dataError ? 'Unable to load admin data.' : 'Loading admin data...'} description={dataError ?? 'Fetching the dashboard, products, and orders from the API.'} />
   }
 
-  if (!adminData) {
-    return <StandaloneState title="Unable to load admin data." description={`Check VITE_API_BASE_URL and the ${adminApi.routes.bootstrap} route. ${adminDataError}`} />
-  }
+  const productRows = products.map((product) => [
+    `${product.name} / ${product.categoryName}`,
+    product.price,
+    product.subtitle,
+    String(product.totalStock),
+    product.isActive ? 'Active' : 'Hidden',
+  ])
+  const orderRows = orders.map((order) => [
+    order.orderNumber,
+    order.customer.name,
+    new Date(order.placedAt).toLocaleDateString(),
+    `${order.itemCount} / ${order.total}`,
+    order.paymentStatus,
+    order.statusLabel,
+  ])
 
   return (
     <div className="app-shell">
@@ -60,22 +95,24 @@ function App() {
         </div>
         <div className="sidebar-footer">
           <a className="sidebar-aux" href="#public">View public website</a>
-          <div className="sidebar-status">Demo data · Not live</div>
+          <div className="sidebar-status">Live API · {admin.role.replace('_', ' ')}</div>
         </div>
       </aside>
 
       <main className="workspace">
         <header className="workspace-header">
           <div className="breadcrumbs">Workspace / Admin</div>
-          <div className="user-chip">Thandi N. · Administrator</div>
+          <div className="user-chip">{admin.fullName} · <button className="text-button" type="button" onClick={() => { void signOut().catch((error: Error) => setSignOutError(error.message)) }}>Sign out</button></div>
         </header>
 
         <section className="workspace-page">
+          {signOutError ? <p role="alert">{signOutError}</p> : null}
+          {backupCodes.length > 0 ? <div className="card backup-codes"><h2>Save your backup codes</h2><p>These are shown once. Store them somewhere safe.</p><p>{backupCodes.join(' · ')}</p></div> : null}
           <Routes>
             <Route path="/" element={<Navigate to="/overview" replace />} />
-            <Route path="/overview" element={<OverviewPage metrics={adminData.metrics} orders={adminData.orders} />} />
-            <Route path="/products" element={<TablePage title="The collection." description="Manage product details, pricing, imagery and available stock." buttonLabel="+ Add product" columns={['Product / SKU', 'Price', 'Variants', 'Stock', 'Visibility', 'Action']} rows={adminData.products} />} />
-            <Route path="/orders" element={<TablePage title="Every order, accounted for." description="Review payments, prepare shipments and keep customers informed." buttonLabel="Export orders" columns={['Order', 'Customer', 'Placed', 'Items / Total', 'Payment', 'Fulfillment', 'Action']} rows={adminData.orders} />} />
+            <Route path="/overview" element={<OverviewPage dashboard={dashboard} orders={orders} />} />
+            <Route path="/products" element={<TablePage title="The collection." description="Products, pricing, variants, and stock from the shop API." buttonLabel="Products" columns={['Product / Category', 'Price', 'Variants', 'Stock', 'Visibility']} rows={productRows} />} />
+            <Route path="/orders" element={<TablePage title="Every order, accounted for." description="Orders and payment statuses retrieved from the API." buttonLabel="Orders" columns={['Order', 'Customer', 'Placed', 'Items / Total', 'Payment', 'Fulfillment']} rows={orderRows} />} />
             <Route path="/donations" element={<SimplePage title="Coordinate every contribution." description="Review donation descriptions and their associated event or task." buttonLabel="Export records" />} />
             <Route path="/volunteers" element={<SimplePage title="Put willing hands to good work." description="Review offers of time, confirm availability and assign meaningful tasks." buttonLabel="Export volunteers" />} />
             <Route path="/tasks" element={<SimplePage title="Turn plans into shared action." description="Assign responsibilities, set due dates and keep event preparation moving." buttonLabel="+ Create task" />} />
@@ -83,6 +120,127 @@ function App() {
           </Routes>
         </section>
       </main>
+    </div>
+  )
+}
+
+function AdminLoginPage() {
+  const { login, verifyCode, pendingToken, nextStep, setupDetails, error: sessionError } = useAdminAuth()
+  const [error, setError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError(null)
+    setIsSubmitting(true)
+    const values = new FormData(event.currentTarget)
+    try {
+      await login(String(values.get('username') ?? '').trim(), String(values.get('password') ?? ''))
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to sign in.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  async function handleVerify(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError(null)
+    setIsSubmitting(true)
+    const values = new FormData(event.currentTarget)
+    try {
+      await verifyCode(String(values.get('code') ?? '').trim())
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to verify your authenticator code.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="auth-shell">
+      <section className="auth-card">
+        <div className="eyebrow">Lepara Ale Fele Moya / administration</div>
+        <h1>{pendingToken ? 'Verify your sign-in.' : 'Admin sign in.'}</h1>
+        <p className="auth-intro">{pendingToken ? 'Use your authenticator app to continue.' : 'Sign in with your admin credentials. The dashboard requires two-factor authentication.'}</p>
+        {!pendingToken ? (
+          <form className="auth-form" onSubmit={handleLogin}>
+            <label>Username<input name="username" type="text" autoComplete="username" maxLength={50} required /></label>
+            <label>Password<input name="password" type="password" autoComplete="current-password" maxLength={128} required /></label>
+            {error || sessionError ? <p className="auth-error" role="alert">{error ?? sessionError}</p> : null}
+            <button className="primary-button" disabled={isSubmitting} type="submit">{isSubmitting ? 'Signing in...' : 'Continue'}</button>
+          </form>
+        ) : (
+          <form className="auth-form" onSubmit={handleVerify}>
+            {nextStep === 'two_factor_setup' && setupDetails ? (
+              <div className="auth-setup">
+                <p>Scan this QR code with your authenticator app, then enter its six-digit code.</p>
+                <img src={setupDetails.qrCodeDataUrl} alt="Authenticator setup QR code" />
+                <p>Manual key: <code>{setupDetails.manualEntryKey}</code></p>
+              </div>
+            ) : null}
+            <label>Authenticator or backup code<input name="code" type="text" autoComplete="one-time-code" inputMode="numeric" maxLength={12} required /></label>
+            {error ? <p className="auth-error" role="alert">{error}</p> : null}
+            <button className="primary-button" disabled={isSubmitting || (nextStep === 'two_factor_setup' && !setupDetails)} type="submit">
+              {isSubmitting ? 'Verifying...' : nextStep === 'two_factor_setup' ? 'Confirm authenticator' : 'Verify and sign in'}
+            </button>
+          </form>
+        )}
+      </section>
+    </div>
+  )
+}
+
+function AdminPasswordChangePage() {
+  const { changePassword, signOut } = useAdminAuth()
+  const [error, setError] = useState<string | null>(null)
+  const [complete, setComplete] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError(null)
+    setIsSubmitting(true)
+    const values = new FormData(event.currentTarget)
+    try {
+      await changePassword(
+        String(values.get('currentPassword') ?? ''),
+        String(values.get('newPassword') ?? ''),
+        String(values.get('confirmPassword') ?? ''),
+      )
+      setComplete(true)
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to change the password.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  if (complete) {
+    return (
+      <div className="auth-shell">
+        <section className="auth-card">
+          <h1>Password updated.</h1>
+          <p className="auth-intro">Your admin password was changed. Sign in again to open the dashboard.</p>
+          <button className="primary-button" onClick={() => { void signOut() }} type="button">Return to sign in</button>
+        </section>
+      </div>
+    )
+  }
+
+  return (
+    <div className="auth-shell">
+      <section className="auth-card">
+        <h1>Choose a new password.</h1>
+        <p className="auth-intro">Change your temporary password before using the admin dashboard.</p>
+        <form className="auth-form" onSubmit={handleSubmit}>
+          <label>Current password<input name="currentPassword" type="password" autoComplete="current-password" required /></label>
+          <label>New password<input name="newPassword" type="password" autoComplete="new-password" minLength={8} required /></label>
+          <label>Confirm new password<input name="confirmPassword" type="password" autoComplete="new-password" minLength={8} required /></label>
+          {error ? <p className="auth-error" role="alert">{error}</p> : null}
+          <button className="primary-button" disabled={isSubmitting} type="submit">{isSubmitting ? 'Updating...' : 'Update password'}</button>
+        </form>
+      </section>
     </div>
   )
 }
@@ -106,58 +264,62 @@ function StandaloneState({ title, description }: { title: string; description: s
   )
 }
 
-function PageFrame({ title, description, buttonLabel, children }: { title: string; description: string; buttonLabel: string; children: ReactNode }) {
+function PageFrame({ title, description, children }: { title: string; description: string; buttonLabel: string; children: ReactNode }) {
   return (
     <div className="page-frame">
       <div className="page-heading">
         <div>
-          <div className="eyebrow">Admin website / sample data</div>
+          <div className="eyebrow">Admin website / live API data</div>
           <h1>{title}</h1>
           <p>{description}</p>
         </div>
-        <button className="primary-button">{buttonLabel}</button>
+        <span className="tag tag-dark">Live data</span>
       </div>
       {children}
-      <div className="page-footnote">All names, records, totals and event details shown here are sample data.</div>
+      <div className="page-footnote">Dashboard figures and records are loaded from the API.</div>
     </div>
   )
 }
 
-function OverviewPage({ metrics, orders }: { metrics: AdminMetric[]; orders: AdminTableRow[] }) {
+function OverviewPage({ dashboard, orders }: { dashboard: AdminDashboardResponse; orders: AdminOrder[] }) {
+  const metrics = [
+    { label: 'Orders awaiting payment', value: dashboard.orders.awaitingPayment },
+    { label: 'Orders to pack', value: dashboard.orders.toPack },
+    { label: 'Volunteers to review', value: dashboard.volunteerApplications.waiting },
+    { label: 'Upcoming initiatives', value: dashboard.initiatives.upcoming },
+  ]
   return (
-    <PageFrame title="A clear view of the work." description="Sunday, 11 October 2026 · Sample workspace, not verified NGO impact." buttonLabel="+ Create event">
+    <PageFrame title="A clear view of the work." description={`Dashboard live data · ${dashboard.today}`} buttonLabel="Dashboard">
       <div className="metric-grid">
         {metrics.map((metric) => (
           <Card key={metric.label} title={metric.label}>
             <div className="metric-value">{metric.value}</div>
-            <div className="muted-copy">Demo records only</div>
+            <div className="muted-copy">Current API total</div>
           </Card>
         ))}
       </div>
       <div className="two-column-overview">
         <div className="stacked-cards">
           <Card title="Attention needed">
-            <div className="list-row"><span className="row-badge">Donation</span><span className="row-text">Naledi Mokoena · 12 blankets for the clothing drive</span><span className="row-action">Review</span></div>
-            <div className="list-row"><span className="row-badge">Volunteer</span><span className="row-text">Lerato Khumalo · Welcome desk · Pending review</span><span className="row-action">Review</span></div>
-            <div className="list-row"><span className="row-badge">Task</span><span className="row-text">Confirm venue setup · Thandi N. · Due 20 Oct</span><span className="row-action">Open</span></div>
+            <div className="list-row"><span className="row-badge">Donations</span><span className="row-text">{dashboard.donationPledges.waiting} pledges waiting for review</span></div>
+            <div className="list-row"><span className="row-badge">Assistance</span><span className="row-text">{dashboard.assistanceRequests.waitingForDecision} requests waiting for a decision</span></div>
+            <div className="list-row"><span className="row-badge">Stock</span><span className="row-text">{dashboard.stock.lowItemCount} stock items need attention</span></div>
           </Card>
           <Card title="Recent orders">
-            <DataTable columns={['Recent order', 'Customer', 'Total', 'Status']} rows={orders.map((row) => [row[0], row[1], row[3].split(' / ')[1], row[5]])} />
+            <DataTable columns={['Recent order', 'Customer', 'Total', 'Status']} rows={orders.slice(0, 5).map((order) => [order.orderNumber, order.customer.name, order.total, order.statusLabel])} />
           </Card>
         </div>
         <div className="stacked-cards aside-rail">
           <Card title="Next community event">
-            <div className="image-placeholder tall">Upcoming event image</div>
-            <div className="pill-row compact-top"><Tag dark>Upcoming</Tag></div>
-            <h3 className="card-headline">Community clothing drive</h3>
-            <p className="muted-copy">24 Oct 2026 · 10:00-14:00</p>
-            <p className="muted-copy">Orlando Community Hall, Soweto</p>
-          </Card>
-          <Card title="Task snapshot">
             <div className="summary-stack">
-              <p>1 To do · 2 In progress</p>
-              <p>1 Done</p>
-              <p className="muted-copy">4 sample tasks across 2 events.</p>
+              <p>{dashboard.orders.toShip} orders to ship</p>
+              <p>{dashboard.orders.onTheWay} orders in transit</p>
+              <p>{dashboard.donationsThisMonth.count} donations this month · {dashboard.donationsThisMonth.monetaryTotal.label}</p>
+            </div>
+          </Card>
+          <Card title="Low stock">
+            <div className="summary-stack">
+              {dashboard.stock.lowItems.map((item) => <p key={item.stockItemId}>{item.itemName}: {item.quantityOnHand} {item.unit} (reorder at {item.reorderLevel})</p>)}
             </div>
           </Card>
         </div>
@@ -198,10 +360,6 @@ function Card({ title, children }: { title?: string; children: ReactNode }) {
       {children}
     </section>
   )
-}
-
-function Tag({ children, dark = false }: { children: ReactNode; dark?: boolean }) {
-  return <span className={`tag${dark ? ' tag-dark' : ''}`}>{children}</span>
 }
 
 function DataTable({ columns, rows }: { columns: string[]; rows: string[][] }) {

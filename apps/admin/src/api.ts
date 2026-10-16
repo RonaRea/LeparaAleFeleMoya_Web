@@ -1,47 +1,60 @@
-import { getJsonOrMock } from '../../../shared/api-client'
+type AdminRequester = <T>(route: string) => Promise<T>
 
-export type AdminMetric = {
-  label: string
-  value: string
+export type AdminDashboardResponse = {
+  today: string
+  assistanceRequests: { waitingForDecision: number; submitted: number; underReview: number; approvedToFulfil: number }
+  volunteerApplications: { waiting: number }
+  donationPledges: { waiting: number; toReceive: number }
+  enquiries: { new: number }
+  stock: {
+    lowItemCount: number
+    lowItems: { stockItemId: number; itemName: string; unit: string; quantityOnHand: number; reorderLevel: number }[]
+  }
+  orders: { awaitingPayment: number; toPack: number; toShip: number; onTheWay: number }
+  initiatives: { upcoming: number }
+  donationsThisMonth: { count: number; monetaryTotal: { cents: number; label: string } }
 }
 
-export type AdminTableRow = string[]
+export type AdminProduct = {
+  productId: number
+  name: string
+  categoryName: string
+  price: string
+  subtitle: string
+  totalStock: number
+  isActive: boolean
+}
 
-export type AdminBootstrapResponse = {
-  metrics: AdminMetric[]
-  products: AdminTableRow[]
-  orders: AdminTableRow[]
+export type AdminOrder = {
+  orderId: number
+  orderNumber: string
+  statusLabel: string
+  paymentMethodLabel: string
+  paymentStatus: string
+  customer: { name: string; email: string }
+  itemCount: number
+  total: string
+  placedAt: string
 }
 
 export const adminApiRoutes = {
-  bootstrap: '/admin/bootstrap',
-  products: '/admin/products',
-  orders: '/admin/orders',
+  dashboard: '/admin/dashboard',
+  products: '/admin/products?page=1&pageSize=50',
+  orders: '/admin/orders?page=1&pageSize=50',
   donations: '/admin/donations',
-  volunteers: '/admin/volunteers',
-  events: '/admin/events',
+  volunteers: '/admin/volunteer-applications',
+  events: '/admin/initiatives',
 } as const
-
-const mockAdminBootstrap: AdminBootstrapResponse = {
-  metrics: [
-    { label: 'Active products', value: '3' },
-    { label: 'Sample orders', value: '3' },
-    { label: 'Donation to review', value: '1' },
-    { label: 'Volunteer to review', value: '1' },
-  ],
-  products: [
-    ['Community tee / TEE-01', 'R250', 'White / Cotton / XS-XXL', '48', 'Active', 'Edit'],
-    ['Everyday hoodie / HOD-01', 'R550', 'Black / Cotton blend / S-XXL', '24', 'Active', 'Edit'],
-    ['Together tote / TOT-01', 'R180', 'Natural / Canvas / One size', '36', 'Active', 'Edit'],
-  ],
-  orders: [
-    ['#LAFM-1008', 'Naledi Mokoena', '09 Oct 2026', '1 / R310', 'Paid', 'On the way', 'Manage'],
-    ['#LAFM-1007', 'Sipho Dlamini', '08 Oct 2026', '1 / R610', 'Paid', 'Processing', 'Manage'],
-    ['#LAFM-0994', 'Naledi Mokoena', '20 Sep 2026', '1 / R240', 'Paid', 'Delivered', 'View'],
-  ],
-}
 
 export const adminApi = {
   routes: adminApiRoutes,
-  getBootstrap: () => getJsonOrMock(adminApiRoutes.bootstrap, mockAdminBootstrap),
+  getDashboard: (request: AdminRequester) => request<AdminDashboardResponse>(adminApiRoutes.dashboard),
+  getProducts: async (request: AdminRequester) => {
+    const reply = await request<AdminProduct[] | { items: AdminProduct[] }>(adminApiRoutes.products)
+    return Array.isArray(reply) ? reply : reply.items
+  },
+  getOrders: async (request: AdminRequester) => {
+    const reply = await request<AdminOrder[] | { items: AdminOrder[] }>(adminApiRoutes.orders)
+    return Array.isArray(reply) ? reply : reply.items
+  },
 }
