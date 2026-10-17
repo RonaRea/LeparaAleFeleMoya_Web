@@ -538,6 +538,10 @@ textarea {
   inset: 0;
 }
 
+.media-has-image::before {
+  display: none;
+}
+
 .tee::before {
   background:
     radial-gradient(circle at 50% 28%, rgba(240, 240, 240, 0.95) 0 8%, transparent 8.5%),

@@ -1530,7 +1530,7 @@ function ProductCard({ product }: { product: Product }) {
 
 function MediaPanel({ variant, label, imageUrl, tall = false, compact = false }: { variant: string; label: string; imageUrl?: string | null; tall?: boolean; compact?: boolean }) {
   return (
-    <div className={`media-panel ${variant}${tall ? ' media-tall' : ''}${compact ? ' media-compact' : ''}`} aria-label={label}>
+    <div className={`media-panel ${variant}${imageUrl ? ' media-has-image' : ''}${tall ? ' media-tall' : ''}${compact ? ' media-compact' : ''}`} aria-label={label}>
       {imageUrl ? <img className="media-image" src={imageUrl} alt={label} loading="lazy" /> : <div className="media-sheen" />}
       {!imageUrl ? <span className="media-label">{label}</span> : null}
     </div>
