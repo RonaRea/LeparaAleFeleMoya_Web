@@ -11,6 +11,7 @@
     "preview:admin": "npm --workspace admin run preview --",
     "dev:public": "npm --workspace public run dev --",
     "build:public": "npm --workspace public run build",
-    "preview:public": "npm --workspace public run preview --"
+    "preview:public": "npm --workspace public run preview --",
+    "build:vercel": "node scripts/build-vercel.mjs"
   }
 }
