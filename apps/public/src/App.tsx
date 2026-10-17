@@ -320,7 +320,7 @@ function HomePage() {
 
   return (
     <div className="page-stack">
-      <section className="hero-grid section-block">
+      <section className="hero-grid section-block home-hero">
         <div className="hero-copy">
           <p className="eyebrow">Wear a little kindness. Carry a shared purpose.</p>
           <h1>Wear purpose. Share possibility.</h1>
@@ -331,27 +331,32 @@ function HomePage() {
           </div>
           <div className="micro-copy">Simple pieces. Shared support.</div>
         </div>
-        <MediaPanel variant="community-room" label="Community partners" />
+        <MediaPanel
+          variant="community-room"
+          label="Community volunteers sharing support"
+          imageUrl="https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=1400&h=1100&fit=crop&auto=format&q=85"
+          loading="eager"
+        />
       </section>
 
-      <section className="info-strip">
+      <section className="info-strip home-info-strip">
         <span>Clothing with purpose</span>
         <span>Community-led events</span>
         <span>Your support makes a difference</span>
       </section>
 
-      <section className="mission-grid section-block">
+      <section className="mission-grid section-block home-mission">
         <div>
           <p className="eyebrow">Shared support</p>
           <h2>Small choices. Collective care.</h2>
         </div>
         <div>
           <p className="body-copy">Our vision is a community where practical support is shared with dignity.</p>
-          <p className="body-copy">Use this concept website to explore how clothing, events and donations could work together in one calm public-facing experience.</p>
+          <p className="body-copy">Clothing, community events and everyday acts of care come together to make support practical and welcoming.</p>
         </div>
       </section>
 
-      <section className="section-block">
+      <section className="section-block home-products">
         <div className="section-head">
           <div>
             <p className="eyebrow">Everyday collection</p>
@@ -366,8 +371,12 @@ function HomePage() {
         </div>
       </section>
 
-      <section className="feature-callout section-block split-highlight">
-        <MediaPanel variant={upcomingEvent?.variant ?? 'clothing-drive'} label={upcomingEvent?.title ?? 'Upcoming community event'} />
+      <section className="feature-callout section-block split-highlight home-event">
+        <MediaPanel
+          variant={upcomingEvent?.variant ?? 'clothing-drive'}
+          label="Volunteers preparing donations at a community event"
+          imageUrl="https://images.unsplash.com/photo-1559027615-cd4628902d4a?w=1200&h=900&fit=crop&auto=format&q=85"
+        />
         <div className="feature-copy">
           <p className="eyebrow">Community support</p>
           <h2>{upcomingEvent?.title ?? 'Community events'}</h2>
@@ -380,7 +389,7 @@ function HomePage() {
         </div>
       </section>
 
-      <section className="cta-band">
+      <section className="cta-band home-cta">
         <div>
           <p className="eyebrow inverse">Shared impact</p>
           <h2>There is more than one way to give.</h2>
@@ -1528,10 +1537,24 @@ function ProductCard({ product }: { product: Product }) {
   )
 }
 
-function MediaPanel({ variant, label, imageUrl, tall = false, compact = false }: { variant: string; label: string; imageUrl?: string | null; tall?: boolean; compact?: boolean }) {
+function MediaPanel({
+  variant,
+  label,
+  imageUrl,
+  tall = false,
+  compact = false,
+  loading = 'lazy',
+}: {
+  variant: string
+  label: string
+  imageUrl?: string | null
+  tall?: boolean
+  compact?: boolean
+  loading?: 'eager' | 'lazy'
+}) {
   return (
     <div className={`media-panel ${variant}${imageUrl ? ' media-has-image' : ''}${tall ? ' media-tall' : ''}${compact ? ' media-compact' : ''}`} aria-label={label}>
-      {imageUrl ? <img className="media-image" src={imageUrl} alt={label} loading="lazy" /> : <div className="media-sheen" />}
+      {imageUrl ? <img className="media-image" src={imageUrl} alt={label} loading={loading} decoding="async" /> : <div className="media-sheen" />}
       {!imageUrl ? <span className="media-label">{label}</span> : null}
     </div>
   )
