@@ -27,6 +27,7 @@ export type EventCard = {
   eventId: number
   slug: string
   title: string
+  imageUrl: string | null
   status: string
   date: string
   time: string
@@ -61,6 +62,7 @@ type ApiInitiative = {
   initiativeId: number
   title: string
   typeName: string
+  imageUrl?: string | null
   summary: string
   description: string
   location: string | null
@@ -122,6 +124,7 @@ function mapInitiative(event: ApiInitiative): EventCard {
     eventId: event.initiativeId,
     slug: String(event.initiativeId),
     title: event.title,
+    imageUrl: event.imageUrl ?? null,
     status: event.phase,
     date: event.dateLabel,
     time: event.timeLabel ?? 'Time to be confirmed',
